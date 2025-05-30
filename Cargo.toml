@@ -1,0 +1,22 @@
+[package]
+name = "ZFetch"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sysinfo = "0.30"
+os_info = "3.7"
+crossterm = "0.27"
+serde = { version = "1.0", features = ["derive"] }         # For config
+serde_json = "1.0"                                         # Optional
+tokio = { version = "1", features = ["full"] }
+# GPU Detection Fallbacks (OpenGL) (Vulkan)
+glutin = "0.30"
+glutin-winit = "0.3"
+winit = "0.28"
+gl = "0.14"
+ash = "0.37"
+raw-window-handle = "0.5"
+toml = "0.8"
+battery = "0.7"
+include_dir = "0.7"

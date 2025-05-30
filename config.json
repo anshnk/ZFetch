@@ -1,0 +1,13 @@
+{
+  "show_distro": true,
+  "show_distro_id": true,
+  "show_kernel": true,
+  "show_cpu": true,
+  "show_gpu": false,
+  "show_memory": true,
+  "show_swap": true,
+  "show_local_ip": true,
+  "show_battery": true,
+  "show_uptime": true,
+  "color": "#FF0000"
+}
