@@ -31,7 +31,7 @@ impl Default for Config {
             show_battery: Some(true),
             show_storage: Some(true),
             show_uptime: Some(true),
-            logo_color: Some("#FFFFFF".to_string()),
+            logo_color: Some("#00FFFF #FF00FF #FFFF00 #FFFFFF".to_string()), 
             color: Some("#FFFFFF".to_string()),
         }
     }

@@ -2,6 +2,14 @@ use crate::system::SystemInfo;
 use crate::config::Config;
 use crossterm::style::{Color, SetForegroundColor, ResetColor};
 use std::io::{self, Write};
+use regex::Regex;
+
+// strip the ANSI codes and measure visible width
+fn visible_width(s: &str) -> usize {
+    // match ANSI escape sequences
+    let ansi_re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    ansi_re.replace_all(s, "").len()
+}
 
 fn pad_box_title(title: &str, box_width: usize) -> String {
     let left_pad = "  ";
@@ -133,7 +141,7 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     }
     info_lines.push(format!("└{:─<width$}┘", "", width = box_width - 2));
 
-    let logo_width = logo_lines.iter().map(|l| l.len()).max().unwrap_or(0);
+    let logo_width = logo_lines.iter().map(|l| visible_width(l)).max().unwrap_or(0);
     let info_width = box_width;
     let total_width = logo_width + 4 + info_width;
     let term_width = 80;
@@ -149,23 +157,29 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     let info_color = config.color.as_deref().and_then(parse_hex_color).unwrap_or(Color::White);
 
     for i in 0..total_lines {
-        let logo_part = logo_lines.get(i).map_or("", |v| *v);
-        let info_part = info_lines.get(i).map_or("", |s| s.as_str());
+    let logo_part = logo_lines.get(i).map_or("", |v| *v);
+    let info_part = info_lines.get(i).map_or("", |s| s.as_str());
 
-        // print logo in logo_color, info in info_color
-        print!("{space:>pad$}", space = "", pad = pad_left);
+    // Print left padding
+    print!("{space:>pad$}", space = "", pad = pad_left);
 
-        // Logo
-        print!("{}", SetForegroundColor(logo_color));
-        print!("{:<logo_width$}", logo_part, logo_width = logo_width);
+    // Apply logo color to *already padded* logo
+    // Apply logo color to logo part
+    print!("{}", SetForegroundColor(logo_color));
+    let logo_visible = visible_width(logo_part);
+    let pad_amount = logo_width.saturating_sub(logo_visible);
+    print!("{}{}", logo_part, " ".repeat(pad_amount));
 
-        // separator and info
-        print!("{}", SetForegroundColor(info_color));
-        if !info_part.is_empty() {
-            print!("    {}", info_part);
-        }
-        println!("{}", ResetColor);
-    }
+    // Apply info color to *already padded* info block
+    let info_string = if !info_part.is_empty() {
+        format!("    {}", info_part)
+    } else {
+        format!("{:info_pad$}", "", info_pad = info_width + 4)
+    };
+    print!("{}{}", SetForegroundColor(info_color), info_string);
+
+    println!("{}", ResetColor);
+}
 
     io::stdout().flush().unwrap();
 }
@@ -178,7 +192,7 @@ fn parse_gb(s: &str) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn parse_hex_color(hex: &str) -> Option<Color> {
+pub(crate) fn parse_hex_color(hex: &str) -> Option<Color> {
     let hex = hex.trim_start_matches('#');
     if hex.len() == 6 {
         if let Ok(rgb) = u32::from_str_radix(hex, 16) {

@@ -12,23 +12,23 @@
 ## Example Output
 
 ```
-                     $1..'          ┌────────────────────────────────────────────────┐
-                 ,xNMM.             │                System Information              │
-               .OMMMMo              ├────────────────────────────────────────────────┤
-               lMM"                 │  Distro    : Mac OS (15.3.1)                   │
-     .;loddo:.  .olloddol;.         │  Distro ID : macos                             │
-   cKMMMMMMMMMMNWMMMMMMMMMM0:       │  Kernel    : 24.3.0                            │
- $2.KMMMMMMMMMMMMMMMMMMMMMMMWd.     │  CPU       : Apple M3 (8 cores) (4.06 GHz)     │
- XMMMMMMMMMMMMMMMMMMMMMMMX.         │  GPU       : Apple M3                          │
-$3;MMMMMMMMMMMMMMMMMMMMMMMM:        │  Memory    : 11.58 GB / 16.00 GB (72%)         │
-:MMMMMMMMMMMMMMMMMMMMMMMM:          │  Swap      : 3.98 GB / 5.00 GB (80%)           │
-.MMMMMMMMMMMMMMMMMMMMMMMMX.         │  Local IP  : 192.0.0.2                         │
- kMMMMMMMMMMMMMMMMMMMMMMMMWd.       │  Battery   : 100% [Discharging]                │
- $4'XMMMMMMMMMMMMMMMMMMMMMMMMMMk    │  Uptime    : 24d 21h 14m                       │
-  'XMMMMMMMMMMMMMMMMMMMMMMMMK.      │  Disk (/)  : 427.60 GB / 460.43 GB (32%) - apfs│
-    $5kMMMMMMMMMMMMMMMMMMMMMMd      └────────────────────────────────────────────────┘
-     ;KMMMMMMMWXXWMMMMMMMk.     
-       "cooc*"    "*coo'"       
+                     ..'          ┌────────────────────────────────────────────────┐
+                 ,xNMM.           │                System Information              │
+               .OMMMMo            ├────────────────────────────────────────────────┤
+               lMM"               │  Distro    : Mac OS (15.3.1)                   │
+     .;loddo:.  .olloddol;.       │  Distro ID : macos                             │
+   cKMMMMMMMMMMNWMMMMMMMMMM0:     │  Kernel    : 24.3.0                            │
+ .KMMMMMMMMMMMMMMMMMMMMMMMWd.     │  CPU       : Apple M3 (8 cores) (4.06 GHz)     │
+ XMMMMMMMMMMMMMMMMMMMMMMMX.       │  Memory    : 11.91 GB / 16.00 GB (74%)         │
+;MMMMMMMMMMMMMMMMMMMMMMMM:        │  Swap      : 2.88 GB / 4.00 GB (72%)           │
+:MMMMMMMMMMMMMMMMMMMMMMMM:        │  Local IP  : 192.0.0.2                         │
+.MMMMMMMMMMMMMMMMMMMMMMMMX.       │  Battery   : 93% [Discharging]                 │
+ kMMMMMMMMMMMMMMMMMMMMMMMMWd.     │  Uptime    : 24d 22h 17m                       │
+ 'XMMMMMMMMMMMMMMMMMMMMMMMMMMk    │  Disk (/)  : 427.52 GB / 460.43 GB (31%) - apfs│
+  'XMMMMMMMMMMMMMMMMMMMMMMMMK.    └────────────────────────────────────────────────┘
+    kMMMMMMMMMMMMMMMMMMMMMMd                                                        
+     ;KMMMMMMMWXXWMMMMMMMk.                                                         
+       "cooc*"    "*coo'"                                                             
 ```
 
 ## Configuration
@@ -49,7 +49,7 @@ These are all the possible configurations you can make in it.
   "show_local_ip": true,
   "show_battery": true,
   "show_uptime": true,
-  "logo_color": "#EABB97",
+  "logo_color": "#FF0000, #00FF00, #0000FF, #FFFF00, #00FFFF, #FF00FF",
   "color": "#FF5733"
 }
 ```
