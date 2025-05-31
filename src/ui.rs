@@ -119,25 +119,49 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
         info_pairs.push((label, value));
     }
 
+    // combine username and hostname into "User@Host"
+    let user_host = if config.show_user_host.unwrap_or(true) {
+        match (&info.username, &info.hostname) {
+            (Some(user), Some(host)) => format!("{}@{}", user, host),
+            (Some(user), None) => user.clone(),
+            (None, Some(host)) => host.clone(),
+            (None, None) => String::new(),
+        }
+    } else {
+        String::new()
+    };
+    let title = if !user_host.is_empty() {
+        format!("{} | System Information", user_host)
+    } else {
+        "System Information".to_string()
+    };
+
     // calculate the max content width needed
     let left_pad = "  ";
     let label_width = 10;
+
+
     let mut max_content = "System Information".len();
     for (label, value) in &info_pairs {
-        let content = format!("{:label_width$}: {}", label, value, label_width = label_width);
-        if content.len() > max_content {
-            max_content = content.len();
+        for line in value.lines() {
+            let content = format!("{:label_width$}: {}", label, line, label_width = label_width);
+            if content.len() > max_content {
+                max_content = content.len();
+            }
         }
     }
     let box_width = max_content + left_pad.len() + 2; // +2 for borders
 
     let mut info_lines = vec![
         format!("┌{:─<width$}┐", "", width = box_width - 2),
-        pad_box_title("System Information", box_width),
+        pad_box_title(&title, box_width),
         format!("├{:─<width$}┤", "", width = box_width - 2),
     ];
     for (label, value) in &info_pairs {
-        info_lines.push(pad_box_line(label, value, box_width));
+        for (i, line) in value.lines().enumerate() {
+            let label_str = if i == 0 { label } else { "" };
+            info_lines.push(pad_box_line(label_str, line, box_width));
+        }
     }
     info_lines.push(format!("└{:─<width$}┘", "", width = box_width - 2));
 
@@ -163,14 +187,11 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     // Print left padding
     print!("{space:>pad$}", space = "", pad = pad_left);
 
-    // Apply logo color to *already padded* logo
-    // Apply logo color to logo part
     print!("{}", SetForegroundColor(logo_color));
     let logo_visible = visible_width(logo_part);
     let pad_amount = logo_width.saturating_sub(logo_visible);
     print!("{}{}", logo_part, " ".repeat(pad_amount));
 
-    // Apply info color to *already padded* info block
     let info_string = if !info_part.is_empty() {
         format!("    {}", info_part)
     } else {

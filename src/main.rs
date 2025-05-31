@@ -7,7 +7,7 @@ use ascii::{get_ascii_logo, process_logo_colors};
 use system::get_system_info;
 use ui::display_output;
 use config::Config;
-use std::time::Instant;
+// use std::time::Instant;
 
 #[tokio::main]
 async fn main() {
@@ -17,8 +17,8 @@ async fn main() {
     let logo = get_ascii_logo(&info.distro_id).await;
     let colored_logo = process_logo_colors(&logo, &config);
     display_output(colored_logo, &info, &config);
-    //let elapsed = start.elapsed();
-    //println!("\nExecution time: {:.2?}", elapsed); debug
+    // let elapsed = start.elapsed();
+    // println!("\nExecution time: {:.2?}", elapsed); //uncomment everything for debugging speeds
 }
 
 // hi from the future

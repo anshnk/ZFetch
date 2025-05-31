@@ -50,7 +50,8 @@ These are all the possible configurations you can make in it.
   "show_battery": true,
   "show_uptime": true,
   "logo_color": "#FF0000, #00FF00, #0000FF, #FFFF00, #00FFFF, #FF00FF",
-  "color": "#FF5733"
+  "color": "#FF5733",
+  "show_user_host": true,
 }
 ```
 
@@ -70,10 +71,10 @@ cargo build --release
 ## Roadmap
 
 * [ ] Fix disk reading, its a little messed up lmao
-* [ ] More customization
-* [ ] Make OS detection easier
-* [ ] Speed up GPU Detection
-      
+* [x] More customization
+* [ ] Make OS detection easier for ASCII
+* [x] Speed up GPU Detection (i used iokit for this and other doohickery)
+
 ## Thanks
 
 🎨 **Huge thanks to the [FastFetch](https://github.com/fastfetch-cli/fastfetch) project** for providing the ASCII logos used in this tool. Their work is greatly appreciated.

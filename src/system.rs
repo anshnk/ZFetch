@@ -4,7 +4,6 @@ use battery;
 use tokio::process::Command;
 use std::future::Future;
 use std::pin::Pin;
-use sysinfo::{System, Disk};
 
 pub struct StorageInfo {
     pub name: String,
@@ -29,6 +28,8 @@ pub struct SystemInfo {
     pub local_ip: Option<String>,
     pub battery: Option<String>,
     pub storage: Vec<StorageInfo>,
+    pub username: Option<String>,
+    pub hostname: Option<String>,
 }
 
 pub async fn get_system_info(config: &Config) -> SystemInfo {
@@ -49,100 +50,105 @@ pub async fn get_system_info(config: &Config) -> SystemInfo {
         Some(
             if cfg!(target_os = "macos") {
                 Box::pin(async {
-                    if let Ok(output) = Command::new("ioreg")
-                        .args(&["-r", "-c", "IOPCIDevice"])
-                        .output()
-                        .await
-                    {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        if let Some(model) = stdout
-                            .lines()
-                            .find_map(|line| {
-                                if line.contains("model") && (line.contains("Apple") || line.contains("display") || line.contains("GPU")) {
-                                    let parts: Vec<&str> = line.split('=').collect();
-                                    if parts.len() > 1 {
-                                        Some(parts[1].trim().replace("\"", ""))
+                    let gpus = detect_gpu_iokit();
+                    if !gpus.is_empty() {
+                        gpus.join(", ")
+                    } else {
+                        // fallback to ioreg/system_profiler if needed
+                        if let Ok(output) = Command::new("ioreg")
+                            .args(&["-r", "-c", "IOPCIDevice"])
+                            .output()
+                            .await
+                        {
+                            let stdout = String::from_utf8_lossy(&output.stdout);
+                            if let Some(model) = stdout
+                                .lines()
+                                .find_map(|line| {
+                                    // FIX: Only check for "model" in the key part before '='
+                                    if let Some((key, value)) = line.split_once('=') {
+                                        if key.contains("model") && (value.contains("Apple") || value.contains("display") || value.contains("GPU")) {
+                                            Some(value.trim().replace('\"', ""))
+                                        } else {
+                                            None
+                                        }
                                     } else {
                                         None
                                     }
-                                } else {
-                                    None
-                                }
-                            })
-                        {
-                            return model;
-                        }
-                    }
-                    if let Ok(output) = Command::new("system_profiler")
-                        .args(&["SPDisplaysDataType", "-json"])
-                        .output()
-                        .await
-                    {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                            if let Some(gpus) = json.get("SPDisplaysDataType").and_then(|v| v.as_array()) {
-                                if let Some(gpu) = gpus.get(0) {
-                                    let model = gpu.get("sppci_model").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                                    let cores = gpu.get("spdisplays_gpu_core_count").and_then(|v| v.as_u64());
-                                    let freq = gpu.get("spdisplays_gpu_core_clock").and_then(|v| v.as_str());
-                                    let mut details = model.to_string();
-                                    if let Some(cores) = cores {
-                                        details.push_str(&format!(" ({} cores", cores));
-                                        if let Some(freq) = freq {
-                                            details.push_str(&format!(", {})", freq));
-                                        } else {
-                                            details.push(')');
-                                        }
-                                    }
-                                    return details;
-                                }
+                                })
+                            {
+                                return model;
                             }
                         }
-                        "Unknown".to_string()
-                    } else {
-                        "Unknown".to_string()
+                        if let Ok(output) = Command::new("system_profiler")
+                            .args(&["SPDisplaysDataType", "-json"])
+                            .output()
+                            .await
+                        {
+                            let stdout = String::from_utf8_lossy(&output.stdout);
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                                if let Some(gpus) = json.get("SPDisplaysDataType").and_then(|v| v.as_array()) {
+                                    if let Some(gpu) = gpus.get(0) {
+                                        let model = gpu.get("sppci_model").and_then(|v| v.as_str()).unwrap_or("Unknown");
+                                        let cores = gpu.get("spdisplays_gpu_core_count").and_then(|v| v.as_u64());
+                                        let freq = gpu.get("spdisplays_gpu_core_clock").and_then(|v| v.as_str());
+                                        let mut details = model.to_string();
+                                        if let Some(cores) = cores {
+                                            details.push_str(&format!(" ({} cores", cores));
+                                            if let Some(freq) = freq {
+                                                details.push_str(&format!(", {})", freq));
+                                            } else {
+                                                details.push(')');
+                                            }
+                                        }
+                                        return details;
+                                    }
+                                }
+                            }
+                            "Unknown".to_string()
+                        } else {
+                            "Unknown".to_string()
+                        }
                     }
                 })
             } else if cfg!(target_os = "windows") {
                 Box::pin(async {
-                    if let Some(gl_gpu) = detect_gpu_opengl() {
-                        return gl_gpu;
-                    }
-                    if let Some(vk_gpu) = detect_gpu_vulkan() {
-                        return vk_gpu;
-                    }
-                    if let Ok(output) = Command::new("wmic")
-                        .args(&["path", "win32_VideoController", "get", "name"])
-                        .output()
-                        .await
-                    {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        let gpus: Vec<_> = stdout
-                            .lines()
-                            .skip(1)
-                            .map(str::trim)
-                            .filter(|line| !line.is_empty())
-                            .collect();
-                        if !gpus.is_empty() {
-                            return gpus.join(", ");
-                        }
-                    }
-                    // Fallback to dxdiag aka worst fallback, didnt work when i tried lmao
-                    if let Ok(_output) = Command::new("dxdiag")
-                        .args(&["/t", "dxdiag.txt"])
-                        .output()
-                        .await
-                    {
-                        if std::path::Path::new("dxdiag.txt").exists() {
-                            if let Ok(contents) = std::fs::read_to_string("dxdiag.txt") {
-                                if let Some(line) = contents.lines().find(|l| l.contains("Card name:")) {
-                                    return line.replace("Card name:", "").trim().to_string();
+                    use tokio::time::{timeout, Duration};
+
+                    // try the Windows API method first, with a 5 second timeout
+                    let gpu_result = timeout(Duration::from_secs(5), async {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let gpus = detect_gpu_windows();
+                            if !gpus.is_empty() {
+                                if gpus.len() == 1 {
+                                    format!("GPU: {}", gpus[0])
+                                } else {
+                                    gpus.iter()
+                                        .enumerate()
+                                        .map(|(i, name)| {
+                                            if i == 0 {
+                                                format!("GPU: {}", name)
+                                            } else {
+                                                format!("GPU {}: {}", i + 1, name)
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
                                 }
+                            } else {
+                                "GPU: Unknown".to_string()
                             }
-                            let _ = std::fs::remove_file("dxdiag.txt");
                         }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            "GPU: Unknown".to_string()
+                        }
+                    }).await;
+
+                    match gpu_result {
+                        Ok(gpu_string) => gpu_string,
+                        _ => "GPU: Unknown".to_string(),
                     }
-                    "Unknown".to_string()
                 })
                 // yo i havent tried linux yet, but just report to me
             } else if cfg!(target_os = "linux") {
@@ -360,6 +366,9 @@ pub async fn get_system_info(config: &Config) -> SystemInfo {
         Vec::new()
     };
 
+    let username = whoami::username();
+    let hostname = whoami::fallible::hostname().ok();
+
     SystemInfo {
         distro,
         distro_id,
@@ -374,6 +383,8 @@ pub async fn get_system_info(config: &Config) -> SystemInfo {
         local_ip,
         battery,
         storage,
+        username: Some(username),
+        hostname,
     }
 }
 
@@ -518,7 +529,11 @@ async fn get_storage_info() -> Vec<StorageInfo> {
                     let total_kb: u64 = columns[1].parse().unwrap_or(0);
                     let avail_kb: u64 = columns[3].parse().unwrap_or(0);
                     let used_kb = total_kb.saturating_sub(avail_kb);
-                    let percent = columns[4].trim_end_matches('%').parse().unwrap_or(0);
+                    let percent = if total_kb > 0 {
+                        ((used_kb as f64 / total_kb as f64) * 100.0).round() as u8
+                    } else {
+                        0
+                    };
 
                     storage_info.push(StorageInfo {
                         name: "/".to_string(),
@@ -602,3 +617,152 @@ async fn get_storage_info() -> Vec<StorageInfo> {
 
     storage_info
 }
+
+#[cfg(target_os = "windows")]
+fn detect_gpu_windows() -> Vec<String> {
+    use windows::{
+        Win32::Devices::DeviceAndDriverInstallation::*,
+        Win32::Foundation::*,
+    };
+
+    let mut gpus = Vec::new();
+
+    unsafe {
+        let hdev = SetupDiGetClassDevsW(
+            Some(&GUID_DEVCLASS_DISPLAY),
+            None,
+            None,
+            DIGCF_PRESENT,
+        ).expect("SetupDiGetClassDevsW failed");
+
+        let mut index = 0;
+        loop {
+            let mut did = SP_DEVINFO_DATA {
+                cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32,
+                ..Default::default()
+            };
+            if SetupDiEnumDeviceInfo(hdev, index, &mut did).is_err() {
+                break;
+            }
+            index += 1;
+
+            let mut buffer = [0u16; 256];
+            if SetupDiGetDeviceRegistryPropertyW(
+                hdev,
+                &did,
+                SPDRP_DEVICEDESC,
+                None,
+                Some(unsafe {
+                    std::slice::from_raw_parts_mut(
+                        buffer.as_mut_ptr() as *mut u8,
+                        buffer.len() * 2
+                    )
+                }),
+                None,
+            ).is_ok()
+            {
+                let name = String::from_utf16_lossy(&buffer[..buffer.iter().position(|&c| c == 0).unwrap_or(0)]);
+                // Only push if not empty and not already in the list
+                if !name.trim().is_empty() && !gpus.contains(&name) {
+                    gpus.push(name);
+                }
+            }
+        }
+        let _ = SetupDiDestroyDeviceInfoList(hdev);
+    }
+    gpus
+}
+
+#[cfg(target_os = "macos")]
+fn detect_gpu_iokit() -> Vec<String> {
+    use core_foundation::base::{CFRelease, CFGetTypeID, TCFType, ToVoid, CFType};
+    use core_foundation::string::{CFString, CFStringGetTypeID};
+    use core_foundation::data::{CFData, CFDataGetTypeID};
+    use io_kit_sys::types::io_iterator_t;
+    use io_kit_sys::*;
+
+    let mut gpus = Vec::new();
+    
+    unsafe {
+        let matching_dict = IOServiceMatching(b"IOAccelerator\0".as_ptr() as *const i8);
+        if matching_dict.is_null() {
+            return gpus;
+        }
+
+        let mut iter: io_iterator_t = 0;
+        let result = IOServiceGetMatchingServices(
+            0, // this should be a mach_port_t (u32), not a pointer 😛
+            matching_dict,
+            &mut iter,
+        );
+        if result != 0 {
+            return gpus;
+        }
+
+        loop {
+            let service = IOIteratorNext(iter);
+            if service == 0 {
+                break;
+            }
+
+            // make a CFStringRef directly
+            let io_name_key = CFString::new("IOName");
+            let cf_name = IORegistryEntryCreateCFProperty(
+                service,
+                io_name_key.as_concrete_TypeRef(),
+                std::ptr::null(),
+                0,
+            );
+            
+            if !cf_name.is_null() {
+                let cf_str = CFString::wrap_under_create_rule(cf_name as *const _);
+                let name = cf_str.to_string();
+                if !name.is_empty() && !gpus.contains(&name) {
+                    gpus.push(name);
+                }
+                CFRelease(<*const _ as ToVoid<CFType>>::to_void(&cf_name));
+            }
+
+            let model_key = CFString::new("model");
+            let cf_model = IORegistryEntryCreateCFProperty(
+                service,
+                model_key.as_concrete_TypeRef(),
+                std::ptr::null(),
+                0,
+            );
+            
+            if !cf_model.is_null() {
+                let type_id = CFGetTypeID(cf_model);
+                
+                if type_id == CFDataGetTypeID() {
+                    let cf_data = CFData::wrap_under_create_rule(cf_model as *const _);
+                    if let Ok(model_str) = std::str::from_utf8(cf_data.bytes()) {
+                        let model_str = model_str.trim_matches(char::from(0)).to_string();
+                        if !model_str.is_empty() && !gpus.contains(&model_str) {
+                            gpus.push(model_str);
+                        }
+                    }
+                } else if type_id == CFStringGetTypeID() {
+                    let cf_str = CFString::wrap_under_create_rule(cf_model as *const _);
+                    let model_str = cf_str.to_string();
+                    if !model_str.is_empty() && !gpus.contains(&model_str) {
+                        gpus.push(model_str);
+                    }
+                }
+                // Fix: Use a fully qualified path to specify the type
+                CFRelease(<*const _ as ToVoid<CFType>>::to_void(&cf_model));
+            }
+
+            IOObjectRelease(service);
+        }
+        
+        IOObjectRelease(iter);
+    }
+    
+    gpus
+}
+
+// Ok so, holy shit first of all, using IOKit to send direct API calls to grab the gpu info
+// was so much better than using system profiler, i went from ~300ms delays to ~20ms after using IOKit.
+// And windows is so much better, the first version of this when i tried it took EIGHTEEN seconds
+// just for it to say N/A.

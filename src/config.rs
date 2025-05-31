@@ -15,6 +15,7 @@ pub struct Config {
     pub show_uptime: Option<bool>,
     pub logo_color: Option<String>,
     pub color: Option<String>,
+    pub show_user_host: Option<bool>,
 }
 
 impl Default for Config {
@@ -33,6 +34,7 @@ impl Default for Config {
             show_uptime: Some(true),
             logo_color: Some("#00FFFF #FF00FF #FFFF00 #FFFFFF".to_string()), 
             color: Some("#FFFFFF".to_string()),
+            show_user_host: Some(true),
         }
     }
 }

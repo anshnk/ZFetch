@@ -7,10 +7,9 @@ edition = "2024"
 sysinfo = "0.30"
 os_info = "3.7"
 crossterm = "0.27"
-serde = { version = "1.0", features = ["derive"] }         # For config
-serde_json = "1.0"                                         # Optional
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
-# GPU Detection Fallbacks (OpenGL) (Vulkan)
 glutin = "0.30"
 glutin-winit = "0.3"
 winit = "0.28"
@@ -21,3 +20,12 @@ toml = "0.8"
 battery = "0.7"
 include_dir = "0.7"
 regex = "1.11.1"
+whoami = "1.4"
+windows = { version = "0.52.0", features = [
+    "Win32_Foundation",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_System_Registry"
+] }
+core-foundation = "0.9"
+io-kit-sys = "0.3"
+fallible = "0.1.3"
