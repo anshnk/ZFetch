@@ -1,14 +1,17 @@
-use crate::system::SystemInfo;
 use crate::config::Config;
-use crossterm::style::{Color, SetForegroundColor, ResetColor};
-use std::io::{self, Write};
+use crate::system::SystemInfo;
+use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use regex::Regex;
+use std::io::{self, Write};
+use std::sync::LazyLock;
+
+// Compile regex once at startup instead of on every call
+static ANSI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[[0-9;]*m").unwrap());
 
 // strip the ANSI codes and measure visible width
 fn visible_width(s: &str) -> usize {
     // match ANSI escape sequences
-    let ansi_re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
-    ansi_re.replace_all(s, "").len()
+    ANSI_RE.replace_all(s, "").len()
 }
 
 fn pad_box_title(title: &str, box_width: usize) -> String {
@@ -22,7 +25,12 @@ fn pad_box_title(title: &str, box_width: usize) -> String {
 fn pad_box_line(label: &str, value: &str, box_width: usize) -> String {
     let left_pad = "  ";
     let label_width = 10;
-    let content = format!("{:label_width$}: {}", label, value, label_width = label_width);
+    let content = format!(
+        "{:label_width$}: {}",
+        label,
+        value,
+        label_width = label_width
+    );
     let content_width = box_width.saturating_sub(2 + left_pad.len());
     let pad = content_width.saturating_sub(content.len());
     format!("│{}{}{}│", left_pad, content, " ".repeat(pad))
@@ -140,11 +148,15 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     let left_pad = "  ";
     let label_width = 10;
 
-
     let mut max_content = "System Information".len();
     for (label, value) in &info_pairs {
         for line in value.lines() {
-            let content = format!("{:label_width$}: {}", label, line, label_width = label_width);
+            let content = format!(
+                "{:label_width$}: {}",
+                label,
+                line,
+                label_width = label_width
+            );
             if content.len() > max_content {
                 max_content = content.len();
             }
@@ -165,7 +177,11 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     }
     info_lines.push(format!("└{:─<width$}┘", "", width = box_width - 2));
 
-    let logo_width = logo_lines.iter().map(|l| visible_width(l)).max().unwrap_or(0);
+    let logo_width = logo_lines
+        .iter()
+        .map(|l| visible_width(l))
+        .max()
+        .unwrap_or(0);
     let info_width = box_width;
     let total_width = logo_width + 4 + info_width;
     let term_width = 80;
@@ -177,30 +193,38 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config) {
     let total_lines = logo_lines.len().max(info_lines.len());
 
     // get colors from config
-    let logo_color = config.logo_color.as_deref().and_then(parse_hex_color).unwrap_or(Color::White);
-    let info_color = config.color.as_deref().and_then(parse_hex_color).unwrap_or(Color::White);
+    let logo_color = config
+        .logo_color
+        .as_deref()
+        .and_then(parse_hex_color)
+        .unwrap_or(Color::White);
+    let info_color = config
+        .color
+        .as_deref()
+        .and_then(parse_hex_color)
+        .unwrap_or(Color::White);
 
     for i in 0..total_lines {
-    let logo_part = logo_lines.get(i).map_or("", |v| *v);
-    let info_part = info_lines.get(i).map_or("", |s| s.as_str());
+        let logo_part = logo_lines.get(i).map_or("", |v| *v);
+        let info_part = info_lines.get(i).map_or("", |s| s.as_str());
 
-    // Print left padding
-    print!("{space:>pad$}", space = "", pad = pad_left);
+        // Print left padding
+        print!("{space:>pad$}", space = "", pad = pad_left);
 
-    print!("{}", SetForegroundColor(logo_color));
-    let logo_visible = visible_width(logo_part);
-    let pad_amount = logo_width.saturating_sub(logo_visible);
-    print!("{}{}", logo_part, " ".repeat(pad_amount));
+        print!("{}", SetForegroundColor(logo_color));
+        let logo_visible = visible_width(logo_part);
+        let pad_amount = logo_width.saturating_sub(logo_visible);
+        print!("{}{}", logo_part, " ".repeat(pad_amount));
 
-    let info_string = if !info_part.is_empty() {
-        format!("    {}", info_part)
-    } else {
-        format!("{:info_pad$}", "", info_pad = info_width + 4)
-    };
-    print!("{}{}", SetForegroundColor(info_color), info_string);
+        let info_string = if !info_part.is_empty() {
+            format!("    {}", info_part)
+        } else {
+            format!("{:info_pad$}", "", info_pad = info_width + 4)
+        };
+        print!("{}{}", SetForegroundColor(info_color), info_string);
 
-    println!("{}", ResetColor);
-}
+        println!("{}", ResetColor);
+    }
 
     io::stdout().flush().unwrap();
 }
