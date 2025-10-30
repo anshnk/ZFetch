@@ -55,8 +55,6 @@ impl ColorSystem {
     ) -> Self {
         let enabled = stdout_is_tty;
 
-        let _ = theme;
-
         if !enabled {
             return Self {
                 enabled: false,
@@ -147,7 +145,18 @@ impl ColorSystem {
             .as_deref()
             .and_then(parse_color_spec)
             .map(|code| wrap_code(&code))
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                let default_code = if let Some(theme) = theme {
+                    if theme.bg.dark {
+                        "94"
+                    } else {
+                        "34"
+                    }
+                } else {
+                    "94"
+                };
+                wrap_code(default_code)
+            });
 
         Self {
             enabled,

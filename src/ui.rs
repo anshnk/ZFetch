@@ -215,6 +215,7 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
     };
 
     let left_pad = "  ";
+    let right_padding = 2;
     let label_width = 10;
 
     let mut max_content = "System Information".len();
@@ -231,6 +232,7 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
             }
         }
     }
+    max_content += right_padding;
     let box_width = max_content + left_pad.len() + 2;
 
     let mut info_lines = vec![
