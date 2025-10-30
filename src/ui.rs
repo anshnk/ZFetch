@@ -11,6 +11,26 @@ fn visible_width(s: &str) -> usize {
     ANSI_RE.replace_all(s, "").len()
 }
 
+fn border_segment(colors: &ColorSystem, ch: char) -> String {
+    if colors.enabled() {
+        let color = colors.box_color();
+        if !color.is_empty() {
+            return format!("{color}{ch}{}", colors.reset());
+        }
+    }
+    ch.to_string()
+}
+
+fn color_border_line(line: String, colors: &ColorSystem) -> String {
+    if colors.enabled() {
+        let color = colors.box_color();
+        if !color.is_empty() {
+            return format!("{color}{line}{}", colors.reset());
+        }
+    }
+    line
+}
+
 fn pad_box_title(title: &str, box_width: usize, colors: &ColorSystem) -> String {
     let left_pad = "  ";
     let content_width = box_width.saturating_sub(2 + left_pad.len());
@@ -25,7 +45,17 @@ fn pad_box_title(title: &str, box_width: usize, colors: &ColorSystem) -> String 
     } else {
         centered
     };
-    format!("│{}{}│", left_pad, colored)
+    let left_border = border_segment(colors, '│');
+    let right_border = border_segment(colors, '│');
+
+    let mut line = String::with_capacity(
+        left_border.len() + left_pad.len() + colored.len() + right_border.len(),
+    );
+    line.push_str(&left_border);
+    line.push_str(left_pad);
+    line.push_str(&colored);
+    line.push_str(&right_border);
+    line
 }
 
 fn pad_box_line(label: &str, value: &str, box_width: usize, colors: &ColorSystem) -> String {
@@ -58,13 +88,26 @@ fn pad_box_line(label: &str, value: &str, box_width: usize, colors: &ColorSystem
     let content_width = box_width.saturating_sub(2 + left_pad.len());
     let plain_len = label_with_colon.len() + value.len();
     let pad = content_width.saturating_sub(plain_len);
-    format!(
-        "│{}{}{}{}│",
-        left_pad,
-        colored_label,
-        colored_value,
-        " ".repeat(pad)
-    )
+    let padding = " ".repeat(pad);
+
+    let left_border = border_segment(colors, '│');
+    let right_border = border_segment(colors, '│');
+
+    let mut line = String::with_capacity(
+        left_border.len()
+            + left_pad.len()
+            + colored_label.len()
+            + colored_value.len()
+            + padding.len()
+            + right_border.len(),
+    );
+    line.push_str(&left_border);
+    line.push_str(left_pad);
+    line.push_str(&colored_label);
+    line.push_str(&colored_value);
+    line.push_str(&padding);
+    line.push_str(&right_border);
+    line
 }
 
 pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: &ColorSystem) {
@@ -191,9 +234,9 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
     let box_width = max_content + left_pad.len() + 2;
 
     let mut info_lines = vec![
-        format!("┌{:─<width$}┐", "", width = box_width - 2),
+        color_border_line(format!("┌{:─<width$}┐", "", width = box_width - 2), colors),
         pad_box_title(&title, box_width, colors),
-        format!("├{:─<width$}┤", "", width = box_width - 2),
+        color_border_line(format!("├{:─<width$}┤", "", width = box_width - 2), colors),
     ];
     for (label, value) in &info_pairs {
         for (i, line) in value.lines().enumerate() {
@@ -201,7 +244,10 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
             info_lines.push(pad_box_line(label_str, line, box_width, colors));
         }
     }
-    info_lines.push(format!("└{:─<width$}┘", "", width = box_width - 2));
+    info_lines.push(color_border_line(
+        format!("└{:─<width$}┘", "", width = box_width - 2),
+        colors,
+    ));
 
     let logo_lines = logo.lines().collect::<Vec<_>>();
     let logo_width = logo_lines
@@ -210,7 +256,9 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         .max()
         .unwrap_or(0);
     let info_width = box_width;
-    let total_width = logo_width + 4 + info_width;
+    let horizontal_gap = 4;
+    let gap_str = " ".repeat(horizontal_gap);
+    let total_width = logo_width + horizontal_gap + info_width;
     let term_width = 80;
     let pad_left = if term_width > total_width {
         (term_width - total_width) / 2
@@ -218,6 +266,16 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         0
     };
     let total_lines = logo_lines.len().max(info_lines.len());
+
+    let outer_padding = 1;
+    for _ in 0..outer_padding {
+        print!("{space:>pad$}", space = "", pad = pad_left);
+        if logo_width > 0 {
+            print!("{:width$}", "", width = logo_width);
+        }
+        print!("{}", gap_str);
+        println!("{:width$}", "", width = info_width);
+    }
 
     for i in 0..total_lines {
         let logo_part = logo_lines.get(i).copied().unwrap_or("");
@@ -233,9 +291,9 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         }
 
         if !info_part.is_empty() {
-            print!("    {}", info_part);
+            print!("{}{}", gap_str, info_part);
         } else {
-            print!("{:info_pad$}", "", info_pad = info_width + 4);
+            print!("{}{:width$}", gap_str, "", width = info_width);
         }
 
         if colors.enabled() {
@@ -243,6 +301,15 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         }
 
         println!();
+    }
+
+    for _ in 0..outer_padding {
+        print!("{space:>pad$}", space = "", pad = pad_left);
+        if logo_width > 0 {
+            print!("{:width$}", "", width = logo_width);
+        }
+        print!("{}", gap_str);
+        println!("{:width$}", "", width = info_width);
     }
 
     io::stdout().flush().unwrap();

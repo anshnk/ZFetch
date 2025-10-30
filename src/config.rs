@@ -17,6 +17,7 @@ pub struct Config {
     pub color: Option<String>,
     pub color_keys: Option<String>,
     pub color_title: Option<String>,
+    pub box_outline_color: Option<String>,
     pub show_user_host: Option<bool>,
 }
 
@@ -38,6 +39,7 @@ impl Default for Config {
             color: None,
             color_keys: None,
             color_title: None,
+            box_outline_color: None,
             show_user_host: Some(true),
         }
     }

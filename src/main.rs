@@ -23,19 +23,23 @@ async fn main() {
 
     let stdout_is_tty = stdout_is_terminal();
     let theme = if stdout_is_tty {
-        detect_terminal_theme(false)
+        detect_terminal_theme(true)
     } else {
         None
     };
-    let colors = ColorSystem::new(&info.distro_id, &info.distro, &config, theme.as_ref(), stdout_is_tty);
-    eprintln!("stdout_is_tty={:?}, colors_enabled={:?}", stdout_is_tty, colors.enabled());
+    let colors = ColorSystem::new(
+        &info.distro_id,
+        &info.distro,
+        &config,
+        theme.as_ref(),
+        stdout_is_tty,
+    );
 
     let colored_logo = process_logo_colors(&logo, &colors);
     display_output(colored_logo, &info, &config, &colors);
     let elapsed = start.elapsed();
     println!("\nExecution time: {:.2?}", elapsed);
 }
-
 
 #[cfg(unix)]
 fn stdout_is_terminal() -> bool {

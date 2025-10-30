@@ -42,6 +42,7 @@ pub struct ColorSystem {
     key_color: String,
     title_color: String,
     value_color: String,
+    box_color: String,
 }
 
 impl ColorSystem {
@@ -63,6 +64,7 @@ impl ColorSystem {
                 key_color: String::new(),
                 title_color: String::new(),
                 value_color: String::new(),
+                box_color: String::new(),
             };
         }
 
@@ -140,12 +142,20 @@ impl ColorSystem {
 
         let value_color = value_code.as_deref().map(wrap_code).unwrap_or_default();
 
+        let box_color = config
+            .box_outline_color
+            .as_deref()
+            .and_then(parse_color_spec)
+            .map(|code| wrap_code(&code))
+            .unwrap_or_default();
+
         Self {
             enabled,
             logo_colors,
             key_color,
             title_color,
             value_color,
+            box_color,
         }
     }
 
@@ -192,6 +202,14 @@ impl ColorSystem {
     pub fn value_color(&self) -> &str {
         if self.enabled {
             &self.value_color
+        } else {
+            ""
+        }
+    }
+
+    pub fn box_color(&self) -> &str {
+        if self.enabled {
+            &self.box_color
         } else {
             ""
         }

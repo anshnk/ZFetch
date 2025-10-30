@@ -566,7 +566,11 @@ async fn get_storage_info() -> Vec<StorageInfo> {
                     let total_kb: u64 = columns[1].parse().unwrap_or(0);
                     let avail_kb: u64 = columns[3].parse().unwrap_or(0);
                     let used_kb = total_kb.saturating_sub(avail_kb);
-                    let percent = columns[4].trim_end_matches('%').parse().unwrap_or(0);
+                    let percent = if total_kb > 0 {
+                        ((used_kb as f64 / total_kb as f64) * 100.0).round() as u8
+                    } else {
+                        0
+                    };
 
                     storage_info.push(StorageInfo {
                         name: "/".to_string(),
