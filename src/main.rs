@@ -1,24 +1,54 @@
 mod ascii;
-mod system;
-mod ui;
 mod config;
+mod system;
+mod terminal;
+mod ui;
 
 use ascii::{get_ascii_logo, process_logo_colors};
-use system::get_system_info;
-use ui::display_output;
 use config::Config;
-// use std::time::Instant;
+#[cfg(not(unix))]
+use std::io::IsTerminal;
+use std::time::Instant;
+use system::get_system_info;
+use terminal::colors::ColorSystem;
+use terminal::theme::detect_terminal_theme;
+use ui::display_output;
 
 #[tokio::main]
 async fn main() {
-    // let start = Instant::now();
+    let start = Instant::now();
     let config = Config::from_exe_dir().unwrap_or_default();
     let info = get_system_info(&config).await;
-    let logo = get_ascii_logo(&info.distro_id).await;
-    let colored_logo = process_logo_colors(&logo, &config);
-    display_output(colored_logo, &info, &config);
-    // let elapsed = start.elapsed();
-    // println!("\nExecution time: {:.2?}", elapsed); //uncomment everything for debugging speeds
+    let logo = get_ascii_logo(&info.distro_id);
+
+    let stdout_is_tty = stdout_is_terminal();
+    let theme = if stdout_is_tty {
+        detect_terminal_theme(true)
+    } else {
+        None
+    };
+    let colors = ColorSystem::new(
+        &info.distro_id,
+        &info.distro,
+        &config,
+        theme.as_ref(),
+        stdout_is_tty,
+    );
+
+    let colored_logo = process_logo_colors(&logo, &colors);
+    display_output(colored_logo, &info, &config, &colors);
+    let elapsed = start.elapsed();
+    println!("\nExecution time: {:.2?}", elapsed);
 }
 
-// hi from the future
+#[cfg(unix)]
+fn stdout_is_terminal() -> bool {
+    use std::io::IsTerminal;
+    let tty = unsafe { libc::isatty(libc::STDOUT_FILENO) == 1 };
+    tty || std::io::stdout().is_terminal()
+}
+
+#[cfg(not(unix))]
+fn stdout_is_terminal() -> bool {
+    std::io::stdout().is_terminal()
+}

@@ -15,6 +15,9 @@ pub struct Config {
     pub show_uptime: Option<bool>,
     pub logo_color: Option<String>,
     pub color: Option<String>,
+    pub color_keys: Option<String>,
+    pub color_title: Option<String>,
+    pub box_outline_color: Option<String>,
     pub show_user_host: Option<bool>,
 }
 
@@ -32,8 +35,11 @@ impl Default for Config {
             show_battery: Some(true),
             show_storage: Some(true),
             show_uptime: Some(true),
-            logo_color: Some("#00FFFF #FF00FF #FFFF00 #FFFFFF".to_string()), 
-            color: Some("#FFFFFF".to_string()),
+            logo_color: None,
+            color: None,
+            color_keys: None,
+            color_title: None,
+            box_outline_color: None,
             show_user_host: Some(true),
         }
     }
