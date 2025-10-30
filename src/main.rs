@@ -8,15 +8,17 @@ use ascii::{get_ascii_logo, process_logo_colors};
 use config::Config;
 #[cfg(not(unix))]
 use std::io::IsTerminal;
-use std::time::Instant;
+//use std::time::Instant;
 use system::get_system_info;
 use terminal::colors::ColorSystem;
 use terminal::theme::detect_terminal_theme;
 use ui::display_output;
 
+// uncomment lines 11, 21, 42, and 43 for debugging, i'll add a argument for getting that laterrr
+
 #[tokio::main]
 async fn main() {
-    let start = Instant::now();
+    //let start = Instant::now();
     let config = Config::from_exe_dir().unwrap_or_default();
     let info = get_system_info(&config).await;
     let logo = get_ascii_logo(&info.distro_id);
@@ -37,8 +39,8 @@ async fn main() {
 
     let colored_logo = process_logo_colors(&logo, &colors);
     display_output(colored_logo, &info, &config, &colors);
-    let elapsed = start.elapsed();
-    println!("\nExecution time: {:.2?}", elapsed);
+    //let elapsed = start.elapsed();
+    //println!("\nExecution time: {:.2?}", elapsed);
 }
 
 #[cfg(unix)]
