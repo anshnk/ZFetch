@@ -1,0 +1,21 @@
+{
+  "show_distro": true,
+  "show_distro_id": true,
+  "show_kernel": true,
+  "show_cpu": true,
+  "show_gpu": true,
+  "show_memory": true,
+  "show_swap": true,
+  "show_local_ip": true,
+  "show_battery": true,
+  "show_storage": true,
+  "show_uptime": true,
+  "show_user_host": true,
+
+  "logo_color": "bold+green 256:208 #ff3355 rgb(0,200,255) 34 96 93 1;94 default",
+  "color": "bold+bright_white",
+  "color_keys": "256:178",
+  "color_title": "rgb(0,220,120)",
+  "box_outline_color": "1;94"
+}
+
