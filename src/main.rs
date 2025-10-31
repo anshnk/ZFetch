@@ -1,8 +1,15 @@
 mod ascii;
+mod common;
 mod config;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 mod system;
 mod terminal;
 mod ui;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use ascii::{get_ascii_logo, process_logo_colors};
 use config::Config;
