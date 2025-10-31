@@ -637,7 +637,11 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
         color_title: Some("33"),
     },
     LogoColorEntry {
-        names: &["containerlinux", "container linux", "container linux by coreos"],
+        names: &[
+            "containerlinux",
+            "container linux",
+            "container linux by coreos",
+        ],
         colors: &["34", "37", "31"],
         color_keys: Some("34"),
         color_title: Some("39"),
@@ -1945,7 +1949,12 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
         color_title: Some("32"),
     },
     LogoColorEntry {
-        names: &["openmandriva", "open-mandriva", "open_mandriva", "openmandriva lx"],
+        names: &[
+            "openmandriva",
+            "open-mandriva",
+            "open_mandriva",
+            "openmandriva lx",
+        ],
         colors: &["34"],
         color_keys: Some("34"),
         color_title: Some("34"),
@@ -2239,7 +2248,12 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
         color_title: Some("32"),
     },
     LogoColorEntry {
-        names: &["raspbian_small", "raspi_small", "raspberrypi_small", "raspberrypios_small"],
+        names: &[
+            "raspbian_small",
+            "raspi_small",
+            "raspberrypi_small",
+            "raspberrypios_small",
+        ],
         colors: &["31", "32"],
         color_keys: Some("31"),
         color_title: Some("32"),
@@ -2527,7 +2541,12 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
         color_title: None,
     },
     LogoColorEntry {
-        names: &["source mage", "source mage gnu/linux", "source_mage", "sourcemage"],
+        names: &[
+            "source mage",
+            "source mage gnu/linux",
+            "source_mage",
+            "sourcemage",
+        ],
         colors: &["39"],
         color_keys: Some("31"),
         color_title: Some("39"),
@@ -2941,13 +2960,26 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
         color_title: Some("36"),
     },
     LogoColorEntry {
-        names: &["windows 8", "windows 8.1", "windows 10", "windows server 2012", "windows server 2012 r2", "windows server 2016", "windows server 2019"],
+        names: &[
+            "windows 8",
+            "windows 8.1",
+            "windows 10",
+            "windows server 2012",
+            "windows server 2012 r2",
+            "windows server 2016",
+            "windows server 2019",
+        ],
         colors: &["36", "36", "36", "36"],
         color_keys: Some("33"),
         color_title: Some("39"),
     },
     LogoColorEntry {
-        names: &["windows", "windows 7", "windows server 2008", "windows server 2008 r2"],
+        names: &[
+            "windows",
+            "windows 7",
+            "windows server 2008",
+            "windows server 2008 r2",
+        ],
         colors: &["31", "32", "34", "33"],
         color_keys: Some("34"),
         color_title: Some("32"),
@@ -2984,7 +3016,9 @@ pub static LOGO_COLOR_ENTRIES: &[LogoColorEntry] = &[
     },
     LogoColorEntry {
         names: &["xeroarch"],
-        colors: &["38;5;50", "38;5;14", "38;5;50", "38;5;93", "38;5;16", "38;5;15"],
+        colors: &[
+            "38;5;50", "38;5;14", "38;5;50", "38;5;93", "38;5;16", "38;5;15",
+        ],
         color_keys: None,
         color_title: None,
     },

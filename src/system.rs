@@ -49,207 +49,12 @@ pub async fn get_system_info(config: &Config) -> SystemInfo {
         None
     };
 
-    let gpu_task: Option<Pin<Box<dyn Future<Output = String> + Send>>> = if config
-        .show_gpu
-        .unwrap_or(true)
-    {
-        Some(if cfg!(target_os = "macos") {
-            Box::pin(async {
-                let gpus = detect_gpu_iokit();
-                if !gpus.is_empty() {
-                    gpus.join(", ")
-                } else {
-                    // fallback to ioreg/system_profiler if needed
-                    if let Ok(output) = Command::new("ioreg")
-                        .args(&["-r", "-c", "IOPCIDevice"])
-                        .output()
-                        .await
-                    {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        if let Some(model) = stdout.lines().find_map(|line| {
-                            // FIX: Only check for "model" in the key part before '='
-                            if let Some((key, value)) = line.split_once('=') {
-                                if key.contains("model")
-                                    && (value.contains("Apple")
-                                        || value.contains("display")
-                                        || value.contains("GPU"))
-                                {
-                                    Some(value.trim().replace('\"', ""))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        }) {
-                            return model;
-                        }
-                    }
-                    if let Ok(output) = Command::new("system_profiler")
-                        .args(&["SPDisplaysDataType", "-json"])
-                        .output()
-                        .await
-                    {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                            if let Some(gpus) =
-                                json.get("SPDisplaysDataType").and_then(|v| v.as_array())
-                            {
-                                if let Some(gpu) = gpus.get(0) {
-                                    let model = gpu
-                                        .get("sppci_model")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("Unknown");
-                                    let cores = gpu
-                                        .get("spdisplays_gpu_core_count")
-                                        .and_then(|v| v.as_u64());
-                                    let freq = gpu
-                                        .get("spdisplays_gpu_core_clock")
-                                        .and_then(|v| v.as_str());
-                                    let mut details = model.to_string();
-                                    if let Some(cores) = cores {
-                                        details.push_str(&format!(" ({} cores", cores));
-                                        if let Some(freq) = freq {
-                                            details.push_str(&format!(", {})", freq));
-                                        } else {
-                                            details.push(')');
-                                        }
-                                    }
-                                    return details;
-                                }
-                            }
-                        }
-                        "Unknown".to_string()
-                    } else {
-                        "Unknown".to_string()
-                    }
-                }
-            })
-        } else if cfg!(target_os = "windows") {
-            Box::pin(async {
-                use tokio::time::{timeout, Duration};
-
-                // try the Windows API method first, with a 5 second timeout
-                let gpu_result = timeout(Duration::from_secs(5), async {
-                    #[cfg(target_os = "windows")]
-                    {
-                        let gpus = detect_gpu_windows();
-                        if !gpus.is_empty() {
-                            if gpus.len() == 1 {
-                                format!("GPU: {}", gpus[0])
-                            } else {
-                                gpus.iter()
-                                    .enumerate()
-                                    .map(|(i, name)| {
-                                        if i == 0 {
-                                            format!("GPU: {}", name)
-                                        } else {
-                                            format!("GPU {}: {}", i + 1, name)
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("\n")
-                            }
-                        } else {
-                            "GPU: Unknown".to_string()
-                        }
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        "GPU: Unknown".to_string()
-                    }
-                })
-                .await;
-
-                match gpu_result {
-                    Ok(gpu_string) => gpu_string,
-                    _ => "GPU: Unknown".to_string(),
-                }
-            })
-            // yo i havent tried linux yet, but just report to me
-        } else if cfg!(target_os = "linux") {
-            Box::pin(async {
-                if let Ok(entries) = std::fs::read_dir("/sys/class/drm") {
-                    let mut gpus = Vec::new();
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            if name.starts_with("card") && !name.contains("-") {
-                                let device_path = path.join("device");
-                                let vendor_path = device_path.join("vendor");
-                                let device_name_path = device_path.join("device");
-                                if let (Ok(vendor), Ok(device)) = (
-                                    std::fs::read_to_string(&vendor_path),
-                                    std::fs::read_to_string(&device_name_path),
-                                ) {
-                                    gpus.push(format!("PCI {}:{}", vendor.trim(), device.trim()));
-                                }
-                            }
-                        }
-                    }
-                    if !gpus.is_empty() {
-                        return gpus.join(", ");
-                    }
-                }
-                if let Ok(output) = Command::new("lspci").output().await {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let gpus: Vec<_> = stdout
-                        .lines()
-                        .filter(|line| line.contains(" VGA ") || line.contains("3D controller"))
-                        .map(|line| line.split(':').last().unwrap_or("").trim().to_string())
-                        .collect();
-                    if !gpus.is_empty() {
-                        return gpus.join(", ");
-                    }
-                }
-                if let Ok(entries) = std::fs::read_dir("/sys/bus/pci/devices") {
-                    let mut gpus = Vec::new();
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        let class_path = path.join("class");
-                        if let Ok(class) = std::fs::read_to_string(&class_path) {
-                            if class.trim().starts_with("0x03") {
-                                let vendor_path = path.join("vendor");
-                                let device_path = path.join("device");
-                                if let (Ok(vendor), Ok(device)) = (
-                                    std::fs::read_to_string(&vendor_path),
-                                    std::fs::read_to_string(&device_path),
-                                ) {
-                                    gpus.push(format!("PCI {}:{}", vendor.trim(), device.trim()));
-                                }
-                            }
-                        }
-                    }
-                    if !gpus.is_empty() {
-                        return gpus.join(", ");
-                    }
-                }
-                if let Some(gl_gpu) = detect_gpu_opengl() {
-                    return gl_gpu;
-                }
-                if let Some(vk_gpu) = detect_gpu_vulkan() {
-                    return vk_gpu;
-                }
-                "Unknown".to_string()
-            })
+    let gpu_task: Option<Pin<Box<dyn Future<Output = String> + Send>>> =
+        if config.show_gpu.unwrap_or(true) {
+            build_platform_gpu_task()
         } else {
-            Box::pin(async {
-                tokio::task::spawn_blocking(|| {
-                    if let Some(gl_gpu) = detect_gpu_opengl() {
-                        return gl_gpu;
-                    }
-                    if let Some(vk_gpu) = detect_gpu_vulkan() {
-                        return vk_gpu;
-                    }
-                    "Unknown".to_string()
-                })
-                .await
-                .unwrap_or_else(|_| "Unknown".to_string())
-            })
-        })
-    } else {
-        None
-    };
+            None
+        };
 
     // Wait for all the stuff to finish and deal with those Option<bool>s
     let (os, sys, kernel, uptime_secs, gpu) = match (uptime_task, gpu_task) {
@@ -388,6 +193,201 @@ pub async fn get_system_info(config: &Config) -> SystemInfo {
         username: Some(username),
         hostname,
     }
+}
+
+#[cfg(target_os = "macos")]
+fn build_platform_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
+    Some(Box::pin(async {
+        let gpus = detect_gpu_iokit();
+        if !gpus.is_empty() {
+            return gpus.join(", ");
+        }
+
+        if let Ok(output) = Command::new("ioreg")
+            .args(&["-r", "-c", "IOPCIDevice"])
+            .output()
+            .await
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(model) = stdout.lines().find_map(|line| {
+                if let Some((key, value)) = line.split_once('=') {
+                    if key.contains("model")
+                        && (value.contains("Apple")
+                            || value.contains("display")
+                            || value.contains("GPU"))
+                    {
+                        Some(value.trim().replace('"', ""))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }) {
+                return model;
+            }
+        }
+
+        if let Ok(output) = Command::new("system_profiler")
+            .args(&["SPDisplaysDataType", "-json"])
+            .output()
+            .await
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                if let Some(gpus) = json.get("SPDisplaysDataType").and_then(|v| v.as_array()) {
+                    if let Some(gpu) = gpus.get(0) {
+                        let model = gpu
+                            .get("sppci_model")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown");
+                        let cores = gpu
+                            .get("spdisplays_gpu_core_count")
+                            .and_then(|v| v.as_u64());
+                        let freq = gpu
+                            .get("spdisplays_gpu_core_clock")
+                            .and_then(|v| v.as_str());
+                        let mut details = model.to_string();
+                        if let Some(cores) = cores {
+                            details.push_str(&format!(" ({} cores", cores));
+                            if let Some(freq) = freq {
+                                details.push_str(&format!(", {})", freq));
+                            } else {
+                                details.push(')');
+                            }
+                        }
+                        return details;
+                    }
+                }
+            }
+        }
+
+        "Unknown".to_string()
+    }))
+}
+
+#[cfg(target_os = "windows")]
+fn build_platform_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
+    Some(Box::pin(async {
+        use tokio::time::{timeout, Duration};
+
+        let gpu_result = timeout(Duration::from_secs(5), async {
+            let gpus = detect_gpu_windows();
+            if gpus.is_empty() {
+                return "GPU: Unknown".to_string();
+            }
+            if gpus.len() == 1 {
+                format!("GPU: {}", gpus[0])
+            } else {
+                gpus.iter()
+                    .enumerate()
+                    .map(|(i, name)| {
+                        if i == 0 {
+                            format!("GPU: {}", name)
+                        } else {
+                            format!("GPU {}: {}", i + 1, name)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        })
+        .await;
+
+        match gpu_result {
+            Ok(gpu_string) => gpu_string,
+            Err(_) => "GPU: Unknown".to_string(),
+        }
+    }))
+}
+
+#[cfg(target_os = "linux")]
+fn build_platform_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
+    Some(Box::pin(async {
+        if let Ok(entries) = std::fs::read_dir("/sys/class/drm") {
+            let mut gpus = Vec::new();
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("card") && !name.contains('-') {
+                        let device_path = path.join("device");
+                        let vendor_path = device_path.join("vendor");
+                        let device_name_path = device_path.join("device");
+                        if let (Ok(vendor), Ok(device)) = (
+                            std::fs::read_to_string(&vendor_path),
+                            std::fs::read_to_string(&device_name_path),
+                        ) {
+                            gpus.push(format!("PCI {}:{}", vendor.trim(), device.trim()));
+                        }
+                    }
+                }
+            }
+            if !gpus.is_empty() {
+                return gpus.join(", ");
+            }
+        }
+
+        if let Ok(output) = Command::new("lspci").output().await {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let gpus: Vec<_> = stdout
+                .lines()
+                .filter(|line| line.contains(" VGA ") || line.contains("3D controller"))
+                .map(|line| line.split(':').last().unwrap_or("").trim().to_string())
+                .collect();
+            if !gpus.is_empty() {
+                return gpus.join(", ");
+            }
+        }
+
+        if let Ok(entries) = std::fs::read_dir("/sys/bus/pci/devices") {
+            let mut gpus = Vec::new();
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let class_path = path.join("class");
+                if let Ok(class) = std::fs::read_to_string(&class_path) {
+                    if class.trim().starts_with("0x03") {
+                        let vendor_path = path.join("vendor");
+                        let device_path = path.join("device");
+                        if let (Ok(vendor), Ok(device)) = (
+                            std::fs::read_to_string(&vendor_path),
+                            std::fs::read_to_string(&device_path),
+                        ) {
+                            gpus.push(format!("PCI {}:{}", vendor.trim(), device.trim()));
+                        }
+                    }
+                }
+            }
+            if !gpus.is_empty() {
+                return gpus.join(", ");
+            }
+        }
+
+        if let Some(gl_gpu) = detect_gpu_opengl() {
+            return gl_gpu;
+        }
+        if let Some(vk_gpu) = detect_gpu_vulkan() {
+            return vk_gpu;
+        }
+
+        "Unknown".to_string()
+    }))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn build_platform_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
+    Some(Box::pin(async {
+        tokio::task::spawn_blocking(|| {
+            if let Some(gl_gpu) = detect_gpu_opengl() {
+                return gl_gpu;
+            }
+            if let Some(vk_gpu) = detect_gpu_vulkan() {
+                return vk_gpu;
+            }
+            "Unknown".to_string()
+        })
+        .await
+        .unwrap_or_else(|_| "Unknown".to_string())
+    }))
 }
 
 fn format_bytes(kb: u64) -> String {

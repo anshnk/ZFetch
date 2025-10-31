@@ -168,7 +168,15 @@ fn wait_for_ready(fd: c_int, timeout_ms: i32) -> io::Result<bool> {
             tv_usec: (timeout_ms % 1000) * 1000,
         };
 
-        let rc = unsafe { select(fd + 1, &mut set, std::ptr::null_mut(), std::ptr::null_mut(), &mut tv) };
+        let rc = unsafe {
+            select(
+                fd + 1,
+                &mut set,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut tv,
+            )
+        };
         if rc < 0 {
             return Err(io::Error::last_os_error());
         }
