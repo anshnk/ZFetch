@@ -31,5 +31,6 @@ io-kit-sys = "0.3"
 windows = { version = "0.52.0", features = [
     "Win32_Foundation",
     "Win32_Devices_DeviceAndDriverInstallation",
-    "Win32_System_Registry"
+    "Win32_System_Registry",
+    "Win32_System_Console"
 ] }

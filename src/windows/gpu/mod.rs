@@ -2,37 +2,10 @@ use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
 
-use tokio::time::{timeout, Duration};
 use windows::{Win32::Devices::DeviceAndDriverInstallation::*, Win32::Foundation::*};
 
-pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
-    Some(Box::pin(async {
-        let gpu_result = timeout(Duration::from_secs(5), async {
-            let gpus = enumerate_gpus();
-            match gpus.len() {
-                0 => "GPU: Unknown".to_string(),
-                1 => format!("GPU: {}", gpus[0]),
-                _ => gpus
-                    .iter()
-                    .enumerate()
-                    .map(|(i, name)| {
-                        if i == 0 {
-                            format!("GPU: {}", name)
-                        } else {
-                            format!("GPU {}: {}", i + 1, name)
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            }
-        })
-        .await;
-
-        match gpu_result {
-            Ok(gpu_string) => gpu_string,
-            Err(_) => "GPU: Unknown".to_string(),
-        }
-    }))
+pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = Vec<String>> + Send>>> {
+    Some(Box::pin(async { enumerate_gpus() }))
 }
 
 fn enumerate_gpus() -> Vec<String> {

@@ -2,13 +2,35 @@ use crate::config::Config;
 use crate::system::SystemInfo;
 use crate::terminal::colors::ColorSystem;
 use regex::Regex;
+use std::env;
 use std::io::{self, Write};
 use std::sync::LazyLock;
 
 static ANSI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[[0-9;]*m").unwrap());
+const LEFT_PAD: &str = "  ";
+const LABEL_WIDTH: usize = 10;
+const HORIZONTAL_GAP_DEFAULT: usize = 4;
+const RIGHT_PADDING: usize = 2;
+const MIN_TERMINAL_WIDTH: usize = 40;
 
 fn visible_width(s: &str) -> usize {
     ANSI_RE.replace_all(s, "").len()
+}
+
+fn truncate_visible(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+    let mut result = String::new();
+    let mut count = 0;
+    for ch in text.chars() {
+        if count >= max_width {
+            break;
+        }
+        result.push(ch);
+        count += 1;
+    }
+    result
 }
 
 fn border_segment(colors: &ColorSystem, ch: char) -> String {
@@ -32,10 +54,22 @@ fn color_border_line(line: String, colors: &ColorSystem) -> String {
 }
 
 fn pad_box_title(title: &str, box_width: usize, colors: &ColorSystem) -> String {
-    let left_pad = "  ";
-    let content_width = box_width.saturating_sub(2 + left_pad.len());
-    let centered = format!("{:^width$}", title, width = content_width);
-    let colored = if colors.enabled() && !title.trim().is_empty() {
+    let content_width = box_width.saturating_sub(2 + LEFT_PAD.len());
+    let truncated_title = truncate_visible(title, content_width);
+    let padding = content_width.saturating_sub(truncated_title.len());
+    let left_pad_count = padding / 2;
+    let right_pad_count = padding - left_pad_count;
+
+    let mut centered = String::with_capacity(content_width);
+    for _ in 0..left_pad_count {
+        centered.push(' ');
+    }
+    centered.push_str(&truncated_title);
+    for _ in 0..right_pad_count {
+        centered.push(' ');
+    }
+
+    let colored = if colors.enabled() && !truncated_title.trim().is_empty() {
         let color = colors.title_color();
         if color.is_empty() {
             centered.clone()
@@ -49,21 +83,50 @@ fn pad_box_title(title: &str, box_width: usize, colors: &ColorSystem) -> String 
     let right_border = border_segment(colors, '│');
 
     let mut line = String::with_capacity(
-        left_border.len() + left_pad.len() + colored.len() + right_border.len(),
+        left_border.len() + LEFT_PAD.len() + colored.len() + right_border.len(),
     );
     line.push_str(&left_border);
-    line.push_str(left_pad);
+    line.push_str(LEFT_PAD);
     line.push_str(&colored);
     line.push_str(&right_border);
     line
 }
 
 fn pad_box_line(label: &str, value: &str, box_width: usize, colors: &ColorSystem) -> String {
-    let left_pad = "  ";
-    let label_width = 10;
-    let label_with_colon = format!("{:label_width$}: ", label, label_width = label_width);
+    let content_width = box_width.saturating_sub(2 + LEFT_PAD.len());
+    let mut label_area_width = LABEL_WIDTH + 2;
+    if label_area_width > content_width {
+        label_area_width = content_width;
+    }
 
-    let colored_label = if colors.enabled() && !label.trim().is_empty() {
+    let colon_space = if label_area_width >= 2 {
+        2
+    } else {
+        label_area_width
+    };
+    let effective_label_width = label_area_width.saturating_sub(colon_space);
+    let truncated_label = truncate_visible(label, effective_label_width);
+
+    let mut label_with_colon = if effective_label_width > 0 {
+        format!(
+            "{:label_width$}",
+            truncated_label,
+            label_width = effective_label_width
+        )
+    } else {
+        String::new()
+    };
+
+    if colon_space == 2 {
+        label_with_colon.push_str(": ");
+    } else if colon_space == 1 {
+        label_with_colon.push(':');
+    }
+
+    let available_value_width = content_width.saturating_sub(label_with_colon.len());
+    let truncated_value = truncate_visible(value, available_value_width);
+
+    let colored_label = if colors.enabled() && !label_with_colon.trim().is_empty() {
         let color = colors.key_color();
         if color.is_empty() {
             label_with_colon.clone()
@@ -74,19 +137,18 @@ fn pad_box_line(label: &str, value: &str, box_width: usize, colors: &ColorSystem
         label_with_colon.clone()
     };
 
-    let colored_value = if colors.enabled() && !value.is_empty() {
+    let colored_value = if colors.enabled() && !truncated_value.is_empty() {
         let color = colors.value_color();
         if color.is_empty() {
-            value.to_string()
+            truncated_value.clone()
         } else {
-            format!("{color}{value}{}", colors.reset())
+            format!("{color}{truncated_value}{}", colors.reset())
         }
     } else {
-        value.to_string()
+        truncated_value.clone()
     };
 
-    let content_width = box_width.saturating_sub(2 + left_pad.len());
-    let plain_len = label_with_colon.len() + value.len();
+    let plain_len = label_with_colon.len() + truncated_value.len();
     let pad = content_width.saturating_sub(plain_len);
     let padding = " ".repeat(pad);
 
@@ -95,14 +157,14 @@ fn pad_box_line(label: &str, value: &str, box_width: usize, colors: &ColorSystem
 
     let mut line = String::with_capacity(
         left_border.len()
-            + left_pad.len()
+            + LEFT_PAD.len()
             + colored_label.len()
             + colored_value.len()
             + padding.len()
             + right_border.len(),
     );
     line.push_str(&left_border);
-    line.push_str(left_pad);
+    line.push_str(LEFT_PAD);
     line.push_str(&colored_label);
     line.push_str(&colored_value);
     line.push_str(&padding);
@@ -150,16 +212,31 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         info_pairs.push(("Kernel".to_string(), info.kernel.clone()));
     }
     if config.show_cpu.unwrap_or(true) {
-        info_pairs.push((
-            "CPU".to_string(),
-            info.cpu.as_deref().unwrap_or("N/A").to_string(),
-        ));
+        let mut cpu_value = info.cpu.as_deref().unwrap_or("N/A").to_string();
+        if let Some(freq) = info.cpu_max_frequency.as_deref() {
+            if !freq.is_empty() {
+                if cpu_value == "N/A" {
+                    cpu_value = format!("({})", freq);
+                } else {
+                    cpu_value.push(' ');
+                    cpu_value.push('(');
+                    cpu_value.push_str(freq);
+                    cpu_value.push(')');
+                }
+            }
+        }
+        info_pairs.push(("CPU".to_string(), cpu_value));
     }
     if config.show_gpu.unwrap_or(true) {
-        info_pairs.push((
-            "GPU".to_string(),
-            info.gpu.as_deref().unwrap_or("N/A").to_string(),
-        ));
+        if info.gpus.is_empty() {
+            info_pairs.push(("GPU".to_string(), "No GPUs detected.".to_string()));
+        } else {
+            for (idx, gpu) in info.gpus.iter().enumerate() {
+                let label = format!("GPU {}", idx + 1);
+                let value = format!("{} [{}]", gpu.name, gpu.kind.label());
+                info_pairs.push((label, value));
+            }
+        }
     }
     if config.show_memory.unwrap_or(true) {
         info_pairs.push(("Memory".to_string(), mem_val.clone()));
@@ -214,26 +291,82 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         "System Information".to_string()
     };
 
-    let left_pad = "  ";
-    let right_padding = 2;
-    let label_width = 10;
+    let logo_lines = logo.lines().collect::<Vec<_>>();
+    let logo_width = logo_lines
+        .iter()
+        .map(|line| visible_width(line))
+        .max()
+        .unwrap_or(0);
 
-    let mut max_content = "System Information".len();
+    let mut term_width = detect_terminal_width();
+    if term_width < MIN_TERMINAL_WIDTH {
+        term_width = MIN_TERMINAL_WIDTH;
+    }
+
+    let mut horizontal_gap = HORIZONTAL_GAP_DEFAULT;
+    if term_width <= logo_width + horizontal_gap {
+        horizontal_gap = term_width.saturating_sub(logo_width);
+    }
+
+    let min_box_width = LEFT_PAD.len() + 2;
+    let mut available_info_width = term_width.saturating_sub(logo_width + horizontal_gap);
+    if available_info_width < min_box_width {
+        available_info_width = min_box_width;
+    }
+
+    let inner_limit = available_info_width.saturating_sub(min_box_width);
+    let mut max_line_content = truncate_visible(&title, inner_limit).len();
+
     for (label, value) in &info_pairs {
         for line in value.lines() {
-            let content = format!(
-                "{:label_width$}: {}",
-                label,
-                line,
-                label_width = label_width
-            );
-            if content.len() > max_content {
-                max_content = content.len();
+            let mut label_area_width = LABEL_WIDTH + 2;
+            if label_area_width > inner_limit {
+                label_area_width = inner_limit;
+            }
+            let colon_space = if label_area_width >= 2 {
+                2
+            } else {
+                label_area_width
+            };
+            let effective_label_width = label_area_width.saturating_sub(colon_space);
+            let truncated_label = truncate_visible(label, effective_label_width);
+
+            let mut label_with_colon = if effective_label_width > 0 {
+                format!(
+                    "{:label_width$}",
+                    truncated_label,
+                    label_width = effective_label_width
+                )
+            } else {
+                String::new()
+            };
+
+            if colon_space == 2 {
+                label_with_colon.push_str(": ");
+            } else if colon_space == 1 {
+                label_with_colon.push(':');
+            }
+
+            let available_value_width = inner_limit.saturating_sub(label_with_colon.len());
+            let truncated_value = truncate_visible(line, available_value_width);
+            let line_length = label_with_colon.len() + truncated_value.len();
+            if line_length > max_line_content {
+                max_line_content = line_length;
             }
         }
     }
-    max_content += right_padding;
-    let box_width = max_content + left_pad.len() + 2;
+
+    if max_line_content > inner_limit {
+        max_line_content = inner_limit;
+    }
+    let max_content = (max_line_content + RIGHT_PADDING).min(inner_limit);
+    let mut box_width = max_content + min_box_width;
+    if box_width > available_info_width {
+        box_width = available_info_width;
+    }
+    if box_width < min_box_width {
+        box_width = min_box_width;
+    }
 
     let mut info_lines = vec![
         color_border_line(format!("┌{:─<width$}┐", "", width = box_width - 2), colors),
@@ -251,17 +384,9 @@ pub fn display_output(logo: String, info: &SystemInfo, config: &Config, colors: 
         colors,
     ));
 
-    let logo_lines = logo.lines().collect::<Vec<_>>();
-    let logo_width = logo_lines
-        .iter()
-        .map(|line| visible_width(line))
-        .max()
-        .unwrap_or(0);
     let info_width = box_width;
-    let horizontal_gap = 4;
     let gap_str = " ".repeat(horizontal_gap);
     let total_width = logo_width + horizontal_gap + info_width;
-    let term_width = 80;
     let pad_left = if term_width > total_width {
         (term_width - total_width) / 2
     } else {
@@ -322,4 +447,50 @@ fn parse_gb(s: &str) -> f64 {
         .next()
         .and_then(|num| num.parse::<f64>().ok())
         .unwrap_or(0.0)
+}
+
+fn detect_terminal_width() -> usize {
+    if let Ok(columns) = env::var("COLUMNS") {
+        if let Ok(val) = columns.trim().parse::<usize>() {
+            if val >= MIN_TERMINAL_WIDTH {
+                return val;
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        use libc::{ioctl, winsize, STDOUT_FILENO, TIOCGWINSZ};
+        unsafe {
+            let mut ws: winsize = std::mem::zeroed();
+            if ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut ws) == 0 && ws.ws_col > 0 {
+                return ws.ws_col as usize;
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::mem::MaybeUninit;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::System::Console::{
+            GetConsoleScreenBufferInfo, GetStdHandle, CONSOLE_SCREEN_BUFFER_INFO, STD_OUTPUT_HANDLE,
+        };
+
+        unsafe {
+            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+            if handle != HANDLE(0) {
+                let mut info = MaybeUninit::<CONSOLE_SCREEN_BUFFER_INFO>::uninit();
+                if GetConsoleScreenBufferInfo(handle, info.as_mut_ptr()).is_ok() {
+                    let info = info.assume_init();
+                    let width = info.srWindow.Right - info.srWindow.Left + 1;
+                    if width > 0 {
+                        return width as usize;
+                    }
+                }
+            }
+        }
+    }
+
+    80
 }

@@ -5,11 +5,11 @@ use std::pin::Pin;
 use serde_json::Value;
 use tokio::process::Command;
 
-pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> {
+pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = Vec<String>> + Send>>> {
     Some(Box::pin(async {
-        let gpus = detect_gpu_iokit();
-        if !gpus.is_empty() {
-            return gpus.into_iter().collect::<Vec<_>>().join(", ");
+        let mut collected = detect_gpu_iokit();
+        if !collected.is_empty() {
+            return collected;
         }
 
         if let Ok(output) = Command::new("ioreg")
@@ -18,7 +18,8 @@ pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> 
             .await
         {
             if let Some(model) = parse_ioreg_output(&output.stdout) {
-                return model;
+                collected.push(model);
+                return collected;
             }
         }
 
@@ -28,11 +29,12 @@ pub fn build_gpu_task() -> Option<Pin<Box<dyn Future<Output = String> + Send>>> 
             .await
         {
             if let Some(model) = parse_system_profiler_output(&output.stdout) {
-                return model;
+                collected.push(model);
+                return collected;
             }
         }
 
-        "Unknown".to_string()
+        collected
     }))
 }
 
